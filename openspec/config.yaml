@@ -1,0 +1,72 @@
+schema: spec-driven
+
+context: |
+  ## Project
+  CRM Dashboard — a client-side web app for tracking prospects and deals.
+  Users upload a CSV export from their CRM and get KPI dashboards, pipeline
+  analysis, and revenue forecasts. No backend, no auth, no direct CRM API.
+
+  ## Tech Stack
+  - Framework: Next.js 14 (App Router), client-side rendering only
+  - Styling: Tailwind CSS v3
+  - UI components: shadcn/ui (Radix UI + Tailwind)
+  - Tables: TanStack Table v8 (via shadcn DataTable)
+  - Charts: Recharts v2 (BarChart, AreaChart, PieChart/RadialBar)
+  - CSV parsing: Papa Parse v5
+  - State: Zustand v4 — global store holds parsed deals across routes
+  - Dates: date-fns v3
+  - Icons: Lucide React
+  - Deployment: Vercel
+
+  ## Routes (app/)
+  - /               → Home: KPI summary + alerts + quick forecast
+  - /pipeline       → Pipeline value, stage breakdown, cold deals
+  - /marketing      → Lead sources, conversion rates, lead quality
+  - /forecast       → 30/60/90-day forecasts + Best/Most Likely/Worst scenarios
+  - /deals          → Filterable and sortable deals table
+
+  ## Domain Model — Deal (mapped from CSV)
+  Fields: id, createdDate, firstName, lastName, email, company, industry,
+  companySize, country, leadSource, status, owner, dealValue, pipelineStage,
+  lastContactDate, nextFollowupDate, tags
+
+  Pipeline stages: Lead → Qualification → Discovery → Proposal Sent →
+  Negotiation → Closed Won | Closed Lost
+
+  ## Stage Probabilities (default, user-editable in V2)
+  Lead: 10% | Qualification: 20% | Discovery: 40% | Proposal Sent: 60% |
+  Negotiation: 80% | Closed Won: 100% | Closed Lost: 0%
+
+  ## Key Business Formulas
+  - Gross pipe = Σ dealValue (open deals only)
+  - Weighted pipe = Σ (dealValue × stageProbability)
+  - Forecast 30/60/90d = Σ weighted dealValue where nextFollowupDate ≤ today+N
+  - Cold deal = lastContactDate < today−14d AND status ≠ Closed
+  - Untreated lead = createdDate < today−48h AND pipelineStage = 'Lead'
+  - Quick win = pipelineStage ∈ [Negotiation, Proposal Sent] AND high dealValue
+
+  ## Roadmap
+  - MVP (current): CSV upload, KPI cards, weighted pipeline, 30/60/90d forecast,
+    filterable deals table, lead source chart, priority actions view
+  - V1: Funnel conversion analysis, Best/Most Likely/Worst scenarios, cold-deal
+    alerts, period-over-period comparison
+  - V2: Historical trends, deal velocity per stage, multi-import comparison,
+    editable stage probabilities, PDF/CSV export
+  - Out of scope: CRM API integration, multi-user auth, Kanban view, AI scoring
+
+  ## Conventions
+  - Language: TypeScript (strict)
+  - Component path: /components/<category>/<ComponentName>.tsx
+  - Business logic: /lib/calculations.ts | /lib/csv-parser.ts
+  - Store: /lib/store.ts (Zustand)
+  - Constants: /lib/constants.ts (STAGE_PROBABILITIES, etc.)
+  - Types: /types/deal.ts
+  - Commit style: conventional commits (feat/fix/refactor/chore)
+
+# Per-artifact rules (optional)
+# rules:
+#   proposal:
+#     - Keep proposals under 500 words
+#     - Always include a "Non-goals" section
+#   tasks:
+#     - Break tasks into chunks of max 2 hours
