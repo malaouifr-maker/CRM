@@ -1,0 +1,33 @@
+# Environment variables - never commit these
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.staging
+
+# Dependencies
+node_modules/
+
+# Build output
+.next/
+out/
+dist/
+build/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+*.swp
+*.swo
+
+# .claude/ is intentionally tracked (Claude Code configuration)
+# To exclude it, uncomment the line below:
+# .claude/
