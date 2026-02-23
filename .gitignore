@@ -29,5 +29,5 @@ npm-debug.log*
 *.swo
 
 # .claude/ is intentionally tracked (Claude Code configuration)
-# To exclude it, uncomment the line below:
-# .claude/
+# Local-only Claude settings are excluded
+.claude/settings.local.json
