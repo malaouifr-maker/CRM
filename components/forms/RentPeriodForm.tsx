@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -35,6 +35,14 @@ interface RentPeriod {
   otherTaxesPercent: number
   indexationRentPercent: number
   indexationChargesPercent: number
+  // UI state
+  showTurnover: boolean
+}
+
+export interface Forecast {
+  monthlyBase: number
+  monthlyRentExclVATExclService: number
+  yearlyRent: number
 }
 
 function createEmptyPeriod(): RentPeriod {
@@ -46,31 +54,27 @@ function createEmptyPeriod(): RentPeriod {
     fixedMonthlyBase: 0, fixedMonthlyStorage: 0, fixedMonthlyService: 0, fixedMonthlyHeating: 0,
     turnoverPercent: 0, minMonthlyTurnover: 0, maxMonthlyTurnover: 0, advanceMonthlyTurnover: 0,
     freeRentMonths: 0, otherTaxesPercent: 0, indexationRentPercent: 0, indexationChargesPercent: 0,
+    showTurnover: false,
   }
 }
 
 // ─── Derived Calculations ─────────────────────────────────────────────────────
 
-function computeForecast(p: RentPeriod, unitArea: number) {
+function computeForecast(p: RentPeriod, unitArea: number): Forecast {
   if (p.pricingMode === "by_m2") {
     const monthlyBase = (p.baseRentPerM2 + p.storageRentPerM2 + p.heatingChargePerM2) * unitArea
-    const monthlyRentExclVATExclService = monthlyBase
-    return { monthlyBase, monthlyRentExclVATExclService, yearlyRent: monthlyRentExclVATExclService * 12 }
+    return { monthlyBase, monthlyRentExclVATExclService: monthlyBase, yearlyRent: monthlyBase * 12 }
   }
   const monthlyBase = p.fixedMonthlyBase + p.fixedMonthlyStorage + p.fixedMonthlyHeating
-  const monthlyRentExclVATExclService = monthlyBase
-  return { monthlyBase, monthlyRentExclVATExclService, yearlyRent: monthlyRentExclVATExclService * 12 }
+  return { monthlyBase, monthlyRentExclVATExclService: monthlyBase, yearlyRent: monthlyBase * 12 }
 }
-
-const fmt = (v: number) =>
-  new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(v)
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <div className="col-span-full mt-5 first:mt-0">
-      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1.5">
+    <div className="col-span-full mt-4 first:mt-0">
+      <h4 className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60 border-b pb-1">
         {children}
       </h4>
     </div>
@@ -79,7 +83,7 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 
 function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
   return (
-    <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+    <label className="text-sm font-medium text-foreground/80 mb-1.5 block">
       {children}{required && <span className="text-destructive ml-0.5">*</span>}
     </label>
   )
@@ -119,23 +123,15 @@ function NumericField({
   )
 }
 
-function ForecastCard({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2.5 dark:border-red-900 dark:bg-red-950/20">
-      <p className="text-xs text-muted-foreground mb-1">{label}</p>
-      <p className="text-base font-bold text-red-600 dark:text-red-400">{fmt(value)}</p>
-    </div>
-  )
-}
-
 // ─── Main component ───────────────────────────────────────────────────────────
 
 interface RentPeriodFormProps {
-  unitArea: number
   compact?: boolean
+  onForecastChange?: (forecast: Forecast) => void
 }
 
-export function RentPeriodForm({ unitArea, compact = false }: RentPeriodFormProps) {
+export function RentPeriodForm({ compact = false, onForecastChange }: RentPeriodFormProps) {
+  const [unitArea, setUnitArea] = useState(0)
   const [periods, setPeriods] = useState<RentPeriod[]>([createEmptyPeriod()])
   const { t } = useTranslation()
 
@@ -145,10 +141,51 @@ export function RentPeriodForm({ unitArea, compact = false }: RentPeriodFormProp
   const addPeriod = () => setPeriods((prev) => [...prev, createEmptyPeriod()])
   const removePeriod = (id: string) => setPeriods((prev) => prev.filter((p) => p.id !== id))
 
-  return (
-    <div className="space-y-5">
-      {periods.map((p, idx) => {
+  // Aggregate forecast across all periods and surface up to parent
+  useEffect(() => {
+    if (!onForecastChange) return
+    const agg = periods.reduce(
+      (acc, p) => {
         const fc = computeForecast(p, unitArea)
+        return {
+          monthlyBase: acc.monthlyBase + fc.monthlyBase,
+          monthlyRentExclVATExclService: acc.monthlyRentExclVATExclService + fc.monthlyRentExclVATExclService,
+          yearlyRent: acc.yearlyRent + fc.yearlyRent,
+        }
+      },
+      { monthlyBase: 0, monthlyRentExclVATExclService: 0, yearlyRent: 0 }
+    )
+    onForecastChange(agg)
+  }, [periods, unitArea, onForecastChange])
+
+  const cols = compact ? "grid-cols-2" : "grid-cols-4"
+
+  return (
+    <div className="space-y-4">
+
+      {/* ── Surface field ── */}
+      <div className="flex items-center gap-4 rounded-lg border bg-muted/30 px-4 py-3">
+        <label className="text-sm font-medium text-foreground flex-1 whitespace-nowrap">
+          {t("form.unitArea")}
+        </label>
+        <div className="flex w-36">
+          <input
+            type="number"
+            min={0}
+            step="any"
+            value={unitArea || ""}
+            placeholder="0"
+            onChange={(e) => setUnitArea(parseFloat(e.target.value) || 0)}
+            className="flex h-9 w-full rounded-l-md border border-input bg-background px-3 text-sm text-right shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
+          <span className="inline-flex items-center px-2 h-9 rounded-r-md border border-l-0 bg-muted text-xs text-muted-foreground select-none">
+            m²
+          </span>
+        </div>
+      </div>
+
+      {/* ── Period cards ── */}
+      {periods.map((p, idx) => {
         const isM2 = p.pricingMode === "by_m2"
         const minMaxError = p.maxMonthlyTurnover > 0 && p.minMonthlyTurnover > p.maxMonthlyTurnover
 
@@ -171,7 +208,7 @@ export function RentPeriodForm({ unitArea, compact = false }: RentPeriodFormProp
               )}
             </div>
 
-            <div className={`p-4 grid gap-x-4 gap-y-3 ${compact ? "grid-cols-2" : "grid-cols-4"}`}>
+            <div className={cn("p-4 grid gap-x-4 gap-y-3", cols)}>
 
               {/* ── A. Period Configuration ── */}
               <SectionHeader>{t("form.periodConfig")}</SectionHeader>
@@ -206,21 +243,27 @@ export function RentPeriodForm({ unitArea, compact = false }: RentPeriodFormProp
                 </label>
               </div>
 
-              {/* ── B. Pricing Mode ── */}
+              {/* ── B. Pricing Mode (segmented toggle) ── */}
               <SectionHeader>{t("form.pricingMode")}</SectionHeader>
 
-              <div className="col-span-full flex gap-6">
-                {(["by_m2", "fixed"] as const).map((mode) => (
-                  <label key={mode} className="flex items-center gap-2 cursor-pointer select-none">
-                    <input
-                      type="radio" name={`pricing-${p.id}`}
-                      checked={p.pricingMode === mode}
-                      onChange={() => update(p.id, { pricingMode: mode })}
-                      className="accent-primary"
-                    />
-                    <span className="text-sm">{t(mode === "by_m2" ? "form.byM2" : "form.fixed")}</span>
-                  </label>
-                ))}
+              <div className="col-span-full">
+                <div className="inline-flex rounded-lg border border-input bg-muted p-1 gap-1">
+                  {(["by_m2", "fixed"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => update(p.id, { pricingMode: mode })}
+                      className={cn(
+                        "rounded-md px-5 py-1.5 text-sm font-medium transition-all duration-150",
+                        p.pricingMode === mode
+                          ? "bg-background shadow-sm text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      {t(mode === "by_m2" ? "form.byM2" : "form.fixed")}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* ── C. Rent Components ── */}
@@ -250,20 +293,36 @@ export function RentPeriodForm({ unitArea, compact = false }: RentPeriodFormProp
                 </>
               )}
 
-              {/* ── D. Turnover Rent ── */}
-              <SectionHeader>{t("form.turnoverRent")}</SectionHeader>
+              {/* ── D. Turnover Rent (progressive disclosure) ── */}
+              <div className="col-span-full mt-1">
+                <button
+                  type="button"
+                  onClick={() => update(p.id, { showTurnover: !p.showTurnover })}
+                  className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <span className={cn(
+                    "flex h-4 w-4 items-center justify-center rounded border border-current text-[10px] leading-none transition-transform duration-200",
+                    p.showTurnover && "rotate-45"
+                  )}>+</span>
+                  {p.showTurnover ? t("form.hideTurnover") : t("form.addTurnover")}
+                </button>
+              </div>
 
-              <NumericField label={t("form.turnoverPercent")} suffix="%"
-                value={p.turnoverPercent} onChange={(v) => update(p.id, { turnoverPercent: v })} />
-              <NumericField label={t("form.minMonthlyTurnover")}
-                value={p.minMonthlyTurnover} onChange={(v) => update(p.id, { minMonthlyTurnover: v })} />
-              <NumericField label={t("form.maxMonthlyTurnover")}
-                value={p.maxMonthlyTurnover} onChange={(v) => update(p.id, { maxMonthlyTurnover: v })} />
-              <NumericField label={t("form.advanceMonthlyTurnover")}
-                value={p.advanceMonthlyTurnover} onChange={(v) => update(p.id, { advanceMonthlyTurnover: v })} />
-
-              {minMaxError && (
-                <p className="col-span-full text-xs text-destructive">{t("form.minMaxError")}</p>
+              {p.showTurnover && (
+                <>
+                  <SectionHeader>{t("form.turnoverRent")}</SectionHeader>
+                  <NumericField label={t("form.turnoverPercent")} suffix="%"
+                    value={p.turnoverPercent} onChange={(v) => update(p.id, { turnoverPercent: v })} />
+                  <NumericField label={t("form.minMonthlyTurnover")}
+                    value={p.minMonthlyTurnover} onChange={(v) => update(p.id, { minMonthlyTurnover: v })} />
+                  <NumericField label={t("form.maxMonthlyTurnover")}
+                    value={p.maxMonthlyTurnover} onChange={(v) => update(p.id, { maxMonthlyTurnover: v })} />
+                  <NumericField label={t("form.advanceMonthlyTurnover")}
+                    value={p.advanceMonthlyTurnover} onChange={(v) => update(p.id, { advanceMonthlyTurnover: v })} />
+                  {minMaxError && (
+                    <p className="col-span-full text-xs text-destructive">{t("form.minMaxError")}</p>
+                  )}
+                </>
               )}
 
               {/* ── E. Incentives ── */}
@@ -288,14 +347,6 @@ export function RentPeriodForm({ unitArea, compact = false }: RentPeriodFormProp
                 value={p.indexationRentPercent} onChange={(v) => update(p.id, { indexationRentPercent: v })} />
               <NumericField label={t("form.indexationChargesPercent")} suffix="%"
                 value={p.indexationChargesPercent} onChange={(v) => update(p.id, { indexationChargesPercent: v })} />
-
-              {/* ── Forecast ── */}
-              <SectionHeader>{t("form.forecast")}</SectionHeader>
-
-              <ForecastCard label={t("form.monthlyBase")} value={fc.monthlyBase} />
-              <ForecastCard label={t("form.monthlyRentExclVAT")} value={fc.monthlyRentExclVATExclService} />
-              <ForecastCard label={t("form.yearlyRent")} value={fc.yearlyRent} />
-              <div /> {/* spacer */}
 
             </div>
           </div>

@@ -152,6 +152,8 @@ export const translations = {
     "form.save": "Enregistrer",
     "form.cancel": "Annuler",
     "form.minMaxError": "Le CA min doit être ≤ au CA max",
+    "form.addTurnover": "Ajouter un loyer variable",
+    "form.hideTurnover": "Masquer le loyer variable",
   },
 
   en: {
@@ -307,6 +309,8 @@ export const translations = {
     "form.save": "Save",
     "form.cancel": "Cancel",
     "form.minMaxError": "Min turnover must be ≤ Max turnover",
+    "form.addTurnover": "Add variable rent",
+    "form.hideTurnover": "Hide variable rent",
   },
 } as const
 
